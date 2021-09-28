@@ -1,80 +1,58 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using Notes.Models;
 using Xamarin.Forms;
 
 namespace Notes.Views
 {
-    [QueryProperty(nameof(ItemId), nameof(ItemId))]
-    public partial class NoteEntryPage : ContentPage
+    public partial class NotesPage : ContentPage
     {
-        public string ItemId
-        {
-            set
-            {
-                LoadNote(value);
-            }
-        }
-
-        public NoteEntryPage()
+        public NotesPage()
         {
             InitializeComponent();
-
-            // Set the BindingContext of the page to a new Note.
-            BindingContext = new Note();
         }
 
-        void LoadNote(string filename)
+        protected override void OnAppearing()
         {
-            try
+            base.OnAppearing();
+
+            var notes = new List<Note>();
+
+            // Create a Note object from each file.
+            var files = Directory.EnumerateFiles(App.FolderPath, "*.notes.txt");
+            foreach (var filename in files)
             {
-                // Retrieve the note and set it as the BindingContext of the page.
-                Note note = new Note
+                notes.Add(new Note
                 {
                     Filename = filename,
                     Text = File.ReadAllText(filename),
                     Date = File.GetCreationTime(filename)
-                };
-                BindingContext = note;
+                });
             }
-            catch (Exception)
-            {
-                Console.WriteLine("Failed to load note.");
-            }
+
+            // Set the data source for the CollectionView to a
+            // sorted collection of notes.
+            collectionView.ItemsSource = notes
+                .OrderBy(d => d.Date)
+                .ToList();
         }
 
-        async void OnSaveButtonClicked(object sender, EventArgs e)
+        async void OnAddClicked(object sender, EventArgs e)
         {
-            var note = (Note)BindingContext;
-
-            if (string.IsNullOrWhiteSpace(note.Filename))
-            {
-                // Save the file.
-                var filename = Path.Combine(App.FolderPath, $"{Path.GetRandomFileName()}.notes.txt");
-                File.WriteAllText(filename, note.Text);
-            }
-            else
-            {
-                // Update the file.
-                File.WriteAllText(note.Filename, note.Text);
-            }
-
-            // Navigate backwards
-            await Shell.Current.GoToAsync("..");
+            // Navigate to the NoteEntryPage, without passing any data.
+            await Shell.Current.GoToAsync(nameof(NoteEntryPage));
         }
 
-        async void OnDeleteButtonClicked(object sender, EventArgs e)
+        async void OnSelectionChanged(object sender, SelectionChangedEventArgs e)
         {
-            var note = (Note)BindingContext;
-
-            // Delete the file.
-            if (File.Exists(note.Filename))
+            if (e.CurrentSelection != null)
             {
-                File.Delete(note.Filename);
+                // Navigate to the NoteEntryPage, passing the filename as a query parameter.
+                Note note = (Note)e.CurrentSelection.FirstOrDefault();
+                await Shell.Current.GoToAsync($"{nameof(NoteEntryPage)}?{nameof(NoteEntryPage.ItemId)}={note.Filename}");
             }
-
-            // Navigate backwards
-            await Shell.Current.GoToAsync("..");
         }
     }
 }
